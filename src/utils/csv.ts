@@ -1,4 +1,14 @@
-export function downloadCsv(filename: string, rows: Record<string, unknown>[]) {
+declare global {
+  interface Window {
+    claude?: { use: (name: string) => Promise<unknown> };
+  }
+}
+
+interface DownloadsCapability {
+  save: (req: { filename: string; data: string }) => Promise<{ status: "saved" }>;
+}
+
+export async function downloadCsv(filename: string, rows: Record<string, unknown>[]) {
   if (rows.length === 0) return;
   const headers = Array.from(
     rows.reduce((set, row) => {
@@ -14,12 +24,24 @@ export function downloadCsv(filename: string, rows: Record<string, unknown>[]) {
     return s;
   };
 
-  const lines = [
+  const csv = [
     headers.join(","),
     ...rows.map((row) => headers.map((h) => escape(row[h])).join(",")),
-  ];
+  ].join("\n");
 
-  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  if (window.claude?.use) {
+    try {
+      const downloads = (await window.claude.use("downloads")) as DownloadsCapability | null;
+      if (downloads) {
+        await downloads.save({ filename, data: csv });
+        return;
+      }
+    } catch {
+      // fall through to the browser download path
+    }
+  }
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
