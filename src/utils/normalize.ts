@@ -1,4 +1,4 @@
-import type { CleanedRow, ColumnMapping, RawRow } from "../types";
+import type { CleanedRow, ColumnMapping, GenericCleanedRow, GenericColumnMapping, RawRow } from "../types";
 
 const TRUE_TOKENS = new Set(["yes", "true", "1", "left", "churned", "terminated", "y"]);
 const FALSE_TOKENS = new Set(["no", "false", "0", "stayed", "active", "current", "n", "retained"]);
@@ -83,4 +83,26 @@ export function normalizeRows(rows: RawRow[], mapping: ColumnMapping): {
   }
 
   return { cleaned, outliersExcluded };
+}
+
+export function normalizeGenericRows(
+  rows: RawRow[],
+  mapping: GenericColumnMapping
+): GenericCleanedRow[] {
+  const cleaned: GenericCleanedRow[] = [];
+
+  for (const row of rows) {
+    const category = mapping.category ? parseCategory(row[mapping.category]) : null;
+    if (category === null) continue;
+
+    cleaned.push({
+      category,
+      product: mapping.product ? parseCategory(row[mapping.product]) : null,
+      measure: mapping.measure ? parseNumber(row[mapping.measure]) : null,
+      date: mapping.date ? parseDate(row[mapping.date]) : null,
+      raw: row,
+    });
+  }
+
+  return cleaned;
 }

@@ -1,4 +1,13 @@
-import type { ActiveFilters, CleanedRow, ColumnMapping, RiskLevel, RiskRow } from "../types";
+import type {
+  ActiveFilters,
+  Aggregation,
+  CleanedRow,
+  ColumnMapping,
+  GenericActiveFilters,
+  GenericCleanedRow,
+  RiskLevel,
+  RiskRow,
+} from "../types";
 
 export function applyFilters(rows: CleanedRow[], filters: ActiveFilters): CleanedRow[] {
   return rows.filter((r) => {
@@ -268,4 +277,165 @@ export function computeRiskRows(rows: CleanedRow[], mapping: ColumnMapping): Ris
       level,
     };
   });
+}
+
+// --- Generic (non-HR) dataset support ---
+
+export function applyGenericFilters(
+  rows: GenericCleanedRow[],
+  filters: GenericActiveFilters
+): GenericCleanedRow[] {
+  return rows.filter((r) => {
+    if (filters.category && r.category !== filters.category) return false;
+    if (filters.product && r.product !== filters.product) return false;
+    return true;
+  });
+}
+
+function aggregate(values: number[], aggregation: Aggregation, rowCount: number): number {
+  if (aggregation === "count") return rowCount;
+  if (values.length === 0) return 0;
+  if (aggregation === "avg") return values.reduce((a, b) => a + b, 0) / values.length;
+  return values.reduce((a, b) => a + b, 0);
+}
+
+export interface GenericKpis {
+  totalRows: number;
+  totalMeasure: number | null;
+  avgMeasure: number | null;
+  uniqueCategories: number;
+  uniqueProducts: number;
+}
+
+export function computeGenericKpis(rows: GenericCleanedRow[], hasMeasure: boolean): GenericKpis {
+  const measures = rows.map((r) => r.measure).filter((v): v is number => v !== null);
+  return {
+    totalRows: rows.length,
+    totalMeasure: hasMeasure ? measures.reduce((a, b) => a + b, 0) : null,
+    avgMeasure: hasMeasure ? mean(measures) : null,
+    uniqueCategories: new Set(rows.map((r) => r.category).filter(Boolean)).size,
+    uniqueProducts: new Set(rows.map((r) => r.product).filter(Boolean)).size,
+  };
+}
+
+export interface GenericBucket {
+  label: string;
+  value: number;
+  rowCount: number;
+}
+
+function groupGeneric(
+  rows: GenericCleanedRow[],
+  getKey: (r: GenericCleanedRow) => string | null,
+  aggregation: Aggregation
+): GenericBucket[] {
+  const map = new Map<string, { values: number[]; rowCount: number }>();
+  for (const row of rows) {
+    const key = getKey(row);
+    if (key === null) continue;
+    const entry = map.get(key) ?? { values: [], rowCount: 0 };
+    if (row.measure !== null) entry.values.push(row.measure);
+    entry.rowCount++;
+    map.set(key, entry);
+  }
+  return Array.from(map.entries())
+    .map(([label, { values, rowCount }]) => ({
+      label,
+      value: aggregate(values, aggregation, rowCount),
+      rowCount,
+    }))
+    .sort((a, b) => b.value - a.value);
+}
+
+export function breakdownByCategoryGeneric(
+  rows: GenericCleanedRow[],
+  aggregation: Aggregation
+): GenericBucket[] {
+  return groupGeneric(rows, (r) => r.category, aggregation);
+}
+
+export function breakdownByProductGeneric(
+  rows: GenericCleanedRow[],
+  aggregation: Aggregation,
+  topN = 10
+): GenericBucket[] {
+  return groupGeneric(rows, (r) => r.product, aggregation).slice(0, topN);
+}
+
+export interface GenericTrendPoint {
+  label: string;
+  value: number;
+}
+
+export function genericTrendByMonth(
+  rows: GenericCleanedRow[],
+  aggregation: Aggregation
+): GenericTrendPoint[] {
+  const map = new Map<string, { values: number[]; rowCount: number }>();
+  for (const row of rows) {
+    if (!row.date) continue;
+    const key = `${row.date.getFullYear()}-${String(row.date.getMonth() + 1).padStart(2, "0")}`;
+    const entry = map.get(key) ?? { values: [], rowCount: 0 };
+    if (row.measure !== null) entry.values.push(row.measure);
+    entry.rowCount++;
+    map.set(key, entry);
+  }
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([label, { values, rowCount }]) => ({
+      label,
+      value: aggregate(values, aggregation, rowCount),
+    }));
+}
+
+export interface GenericInsight {
+  text: string;
+}
+
+export function generateGenericInsights(
+  rows: GenericCleanedRow[],
+  aggregation: Aggregation,
+  hasProduct: boolean
+): GenericInsight[] {
+  const insights: GenericInsight[] = [];
+  if (rows.length === 0) return insights;
+
+  const metricLabel = aggregation === "count" ? "rows" : aggregation === "avg" ? "average" : "total";
+
+  const categoryBuckets = breakdownByCategoryGeneric(rows, aggregation).filter((b) => b.rowCount >= 3);
+  if (categoryBuckets.length >= 2) {
+    const top = categoryBuckets[0];
+    const sumAll = categoryBuckets.reduce((a, b) => a + b.value, 0);
+    const share = sumAll > 0 ? (top.value / sumAll) * 100 : 0;
+    insights.push({
+      text: `${top.label} leads by ${metricLabel} at ${top.value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${
+        aggregation !== "count" && share > 0 ? ` — ${share.toFixed(0)}% of the total across categories` : ""
+      }.`,
+    });
+
+    const bottom = categoryBuckets[categoryBuckets.length - 1];
+    if (bottom.label !== top.label && bottom.value > 0 && top.value / bottom.value > 2) {
+      insights.push({
+        text: `${top.label} outperforms ${bottom.label} by ${(top.value / bottom.value).toFixed(1)}x on ${metricLabel}.`,
+      });
+    }
+  }
+
+  if (hasProduct) {
+    const productBuckets = breakdownByProductGeneric(rows, aggregation, 1000).filter((b) => b.rowCount >= 3);
+    if (productBuckets.length >= 1) {
+      const top = productBuckets[0];
+      insights.push({
+        text: `${top.label} is the top product by ${metricLabel}, at ${top.value.toLocaleString(undefined, { maximumFractionDigits: 1 })}.`,
+      });
+    }
+  }
+
+  insights.push({
+    text: `${rows.length.toLocaleString()} rows in the current view across ${new Set(rows.map((r) => r.category)).size} categories${
+      hasProduct ? ` and ${new Set(rows.map((r) => r.product).filter(Boolean)).size} products` : ""
+    }.`,
+  });
+
+  return insights.slice(0, 5);
 }

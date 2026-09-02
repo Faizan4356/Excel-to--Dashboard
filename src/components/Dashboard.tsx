@@ -145,7 +145,7 @@ export default function Dashboard({ rows, mapping, colorBlindSafe, onStartOver }
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
         <ChartPanel title="Overall Retention" icon="◐">
           <RetentionDonut
             stayed={kpis.total - kpis.attritionCount}

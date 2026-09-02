@@ -1,4 +1,4 @@
-import type { FieldMeta } from "../types";
+import type { FieldMeta, GenericFieldMeta } from "../types";
 
 export const FIELD_DEFS: FieldMeta[] = [
   {
@@ -63,5 +63,36 @@ export const FIELD_DEFS: FieldMeta[] = [
     required: false,
     kind: "date",
     keywords: ["date", "hire date", "hiredate", "start date", "exit date", "termination date", "joining date"],
+  },
+];
+
+export const GENERIC_FIELD_DEFS: GenericFieldMeta[] = [
+  {
+    key: "category",
+    label: "Category",
+    required: true,
+    kind: "categorical",
+    keywords: ["category", "categories", "segment", "type", "class", "region", "group", "department"],
+  },
+  {
+    key: "product",
+    label: "Product",
+    required: false,
+    kind: "categorical",
+    keywords: ["product", "item", "sku", "product name", "name"],
+  },
+  {
+    key: "measure",
+    label: "Measure (numeric value to total/average)",
+    required: false,
+    kind: "numeric",
+    keywords: ["sales", "revenue", "amount", "quantity", "qty", "price", "total", "value", "units", "profit", "cost", "spend"],
+  },
+  {
+    key: "date",
+    label: "Date",
+    required: false,
+    kind: "date",
+    keywords: ["date", "order date", "orderdate", "transaction date", "created at", "timestamp"],
   },
 ];

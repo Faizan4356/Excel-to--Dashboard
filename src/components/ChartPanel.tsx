@@ -11,7 +11,7 @@ import {
   Legend,
 } from "chart.js";
 import type { ReactNode } from "react";
-import type { BreakdownBucket, TrendPoint } from "../utils/compute";
+import type { BreakdownBucket, GenericBucket, GenericTrendPoint, TrendPoint } from "../utils/compute";
 
 ChartJS.register(
   CategoryScale,
@@ -35,27 +35,27 @@ interface ChartPanelProps {
 export function ChartPanel({ title, icon, featured, empty, children }: ChartPanelProps) {
   return (
     <div
-      className={`rounded-xl border p-4 shadow-sm animate-fade-in ${featured ? "sm:col-span-2" : ""}`}
+      className={`rounded-xl border p-3 shadow-sm animate-fade-in ${featured ? "xl:col-span-2" : ""}`}
       style={{ background: "var(--panel)", borderColor: "var(--border)" }}
     >
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-1.5 mb-2">
         <span
-          className="flex h-6 w-6 items-center justify-center rounded-full text-xs"
+          className="flex h-5 w-5 items-center justify-center rounded-full text-[11px]"
           style={{ background: "var(--panel-alt)", color: "var(--text-muted)" }}
           aria-hidden
         >
           {icon}
         </span>
-        <h3 className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+        <h3 className="text-xs font-semibold" style={{ color: "var(--text)" }}>
           {title}
         </h3>
       </div>
       {empty ? (
-        <div className="flex h-40 items-center justify-center text-xs text-center px-4" style={{ color: "var(--text-faint)" }}>
+        <div className="flex h-32 items-center justify-center text-xs text-center px-4" style={{ color: "var(--text-faint)" }}>
           Map a column for this field on the mapping screen to unlock this chart.
         </div>
       ) : (
-        <div style={{ height: featured ? 260 : 200 }}>{children}</div>
+        <div style={{ height: featured ? 200 : 160 }}>{children}</div>
       )}
     </div>
   );
@@ -282,6 +282,161 @@ export function TrendLineChart({
         plugins: {
           legend: { display: false },
         },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: textColor(), font: { size: 10 } } },
+          y: { grid: { color: gridColor }, ticks: { color: textColor(), font: { size: 10 } } },
+        },
+      }}
+    />
+  );
+}
+
+interface GenericBarProps {
+  buckets: GenericBucket[];
+  color: string;
+  valueLabel: string;
+  onClickLabel?: (label: string) => void;
+  activeLabel?: string | null;
+  horizontal?: boolean;
+}
+
+export function GenericBarChart({
+  buckets,
+  color,
+  valueLabel,
+  onClickLabel,
+  activeLabel,
+  horizontal,
+}: GenericBarProps) {
+  const data = {
+    labels: buckets.map((b) => b.label),
+    datasets: [
+      {
+        label: valueLabel,
+        data: buckets.map((b) => b.value),
+        backgroundColor: buckets.map((b) =>
+          activeLabel && activeLabel !== b.label
+            ? `color-mix(in srgb, ${color} 35%, transparent)`
+            : color
+        ),
+        borderRadius: 4,
+      },
+    ],
+  };
+
+  return (
+    <Bar
+      data={data}
+      options={{
+        indexAxis: horizontal ? "y" : "x",
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 300 },
+        onClick: (_evt, elements) => {
+          if (!onClickLabel || elements.length === 0) return;
+          const idx = elements[0].index;
+          const label = buckets[idx]?.label;
+          if (label) onClickLabel(label);
+        },
+        onHover: (evt, elements) => {
+          if (evt.native?.target && onClickLabel) {
+            (evt.native.target as HTMLElement).style.cursor =
+              elements.length > 0 ? "pointer" : "default";
+          }
+        },
+        plugins: {
+          legend: { display: false },
+        },
+        scales: {
+          x: {
+            grid: { display: horizontal, color: gridColor },
+            ticks: { color: textColor(), font: { size: 10 } },
+          },
+          y: {
+            grid: { display: !horizontal, color: gridColor },
+            ticks: { color: textColor(), font: { size: 10 } },
+          },
+        },
+      }}
+    />
+  );
+}
+
+interface GenericPieProps {
+  buckets: GenericBucket[];
+  palette: string[];
+  onClickLabel?: (label: string) => void;
+  activeLabel?: string | null;
+}
+
+export function GenericPieChart({ buckets, palette, onClickLabel, activeLabel }: GenericPieProps) {
+  const data = {
+    labels: buckets.map((b) => b.label),
+    datasets: [
+      {
+        data: buckets.map((b) => b.value),
+        backgroundColor: buckets.map((b, i) =>
+          activeLabel && activeLabel !== b.label
+            ? `color-mix(in srgb, ${palette[i % palette.length]} 35%, transparent)`
+            : palette[i % palette.length]
+        ),
+        borderWidth: 0,
+      },
+    ],
+  };
+  return (
+    <Doughnut
+      data={data}
+      options={{
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 300 },
+        cutout: "60%",
+        onClick: (_evt, elements) => {
+          if (!onClickLabel || elements.length === 0) return;
+          const idx = elements[0].index;
+          const label = buckets[idx]?.label;
+          if (label) onClickLabel(label);
+        },
+        plugins: {
+          legend: { position: "bottom", labels: { color: textColor(), boxWidth: 10, font: { size: 10 } } },
+        },
+      }}
+    />
+  );
+}
+
+export function GenericTrendChart({
+  points,
+  color,
+  valueLabel,
+}: {
+  points: GenericTrendPoint[];
+  color: string;
+  valueLabel: string;
+}) {
+  const data = {
+    labels: points.map((p) => p.label),
+    datasets: [
+      {
+        label: valueLabel,
+        data: points.map((p) => p.value),
+        borderColor: color,
+        backgroundColor: `color-mix(in srgb, ${color} 20%, transparent)`,
+        fill: true,
+        tension: 0.3,
+        pointRadius: 2,
+      },
+    ],
+  };
+  return (
+    <Line
+      data={data}
+      options={{
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 300 },
+        plugins: { legend: { display: false } },
         scales: {
           x: { grid: { display: false }, ticks: { color: textColor(), font: { size: 10 } } },
           y: { grid: { color: gridColor }, ticks: { color: textColor(), font: { size: 10 } } },

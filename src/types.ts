@@ -69,3 +69,32 @@ export interface RiskRow {
   score: number;
   level: RiskLevel;
 }
+
+export type DatasetMode = "hr" | "generic";
+
+export type GenericLogicalField = "category" | "product" | "measure" | "date";
+
+export interface GenericFieldMeta {
+  key: GenericLogicalField;
+  label: string;
+  required: boolean;
+  kind: "categorical" | "numeric" | "date";
+  keywords: string[];
+}
+
+export type GenericColumnMapping = Partial<Record<GenericLogicalField, string | null>>;
+
+export type Aggregation = "sum" | "avg" | "count";
+
+export interface GenericCleanedRow {
+  category: string | null;
+  product: string | null;
+  measure: number | null;
+  date: Date | null;
+  raw: RawRow;
+}
+
+export interface GenericActiveFilters {
+  category: string | null;
+  product: string | null;
+}

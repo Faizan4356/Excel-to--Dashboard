@@ -1,5 +1,10 @@
-import { FIELD_DEFS } from "./fields";
-import type { ColumnMapping, RawRow } from "../types";
+import { FIELD_DEFS, GENERIC_FIELD_DEFS } from "./fields";
+import type {
+  ColumnMapping,
+  DatasetMode,
+  GenericColumnMapping,
+  RawRow,
+} from "../types";
 
 export function getHeaders(rows: RawRow[]): string[] {
   const headers = new Set<string>();
@@ -9,11 +14,19 @@ export function getHeaders(rows: RawRow[]): string[] {
   return Array.from(headers);
 }
 
-export function guessMapping(headers: string[]): ColumnMapping {
-  const mapping: ColumnMapping = {};
+interface FieldLike {
+  key: string;
+  keywords: string[];
+}
+
+function guess<T extends string>(
+  headers: string[],
+  fields: FieldLike[]
+): Partial<Record<T, string | null>> {
+  const mapping: Partial<Record<T, string | null>> = {};
   const usedHeaders = new Set<string>();
 
-  for (const field of FIELD_DEFS) {
+  for (const field of fields) {
     let best: string | null = null;
     let bestScore = 0;
 
@@ -35,12 +48,27 @@ export function guessMapping(headers: string[]): ColumnMapping {
     }
 
     if (best && bestScore > 0) {
-      mapping[field.key] = best;
+      mapping[field.key as T] = best;
       usedHeaders.add(best);
     } else {
-      mapping[field.key] = null;
+      mapping[field.key as T] = null;
     }
   }
 
   return mapping;
+}
+
+export function guessMapping(headers: string[]): ColumnMapping {
+  return guess(headers, FIELD_DEFS);
+}
+
+export function guessGenericMapping(headers: string[]): GenericColumnMapping {
+  return guess(headers, GENERIC_FIELD_DEFS);
+}
+
+const ATTRITION_FIELD = FIELD_DEFS.find((f) => f.key === "attrition")!;
+
+export function detectDatasetMode(headers: string[]): DatasetMode {
+  const guessed = guess<string>(headers, [ATTRITION_FIELD]);
+  return guessed[ATTRITION_FIELD.key] ? "hr" : "generic";
 }
